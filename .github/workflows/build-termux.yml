@@ -1,0 +1,140 @@
+name: 'Termux libs' # empty name
+#on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    #inputs:
+      #packages:
+        #description: Type the command you want to run.
+        #required: true
+        #type: string
+
+jobs:
+  build-x86_64:
+    runs-on: ubuntu-24.04
+    container:
+      image: termux/termux-docker:x86_64
+      volumes: 
+        - /tmp/node20:/__e/node20
+    env:
+      TERMUX_MAIN_PACKAGE_FORMAT: debian
+      ANDROID_ROOT: /system
+      ANDROID_DATA: /data
+      PREFIX: /data/data/com.termux/files/usr
+      HOME: /data/data/com.termux/files/home
+      PATH: /data/data/com.termux/files/usr/bin
+      TMPDIR: /data/data/com.termux/files/usr/tmp
+      LANG: en_US.UTF-8
+      TZ: UTC
+    steps:
+      - name: set pkg command to use the packages-cf.termux.dev mirror
+        run: ln -sf ${PREFIX}/etc/termux/mirrors/default ${PREFIX}/etc/termux/chosen_mirrors
+      - name: upgrade all packages to prepare for installing nodejs
+        run: /entrypoint.sh bash -c "yes | pkg upgrade -y"
+      - name: fix executable bit for all binaries in $PREFIX/bin for all users
+        run: chmod -R o+x ${PREFIX}/bin
+      - name: install bionic-libc nodejs to force compatibility with actions/checkout and actions/upload-artifact
+        run: |
+          /entrypoint.sh pkg install -y nodejs-lts
+          ln -sf ${PREFIX}/bin /__e/node20/bin
+      - uses: actions/checkout@v4.2.2
+      - name: fix permissions of repository after actions/checkout, which ran as root user, while entrypoint.sh activates system user (1000)
+        run: chown -R 1000:1000 .
+      - name: setup
+        run: |
+          /entrypoint.sh pkg install -y ninja python git
+          /entrypoint.sh pip install meson
+          /entrypoint.sh pkg install -y tur-repo x11-repo
+          /entrypoint.sh pkg install -y clang pkg-config alsa-lib pulseaudio fontconfig freetype gnutls mesa libx11 libxcursor libxfixes libxi libxrandr libxrender libxext vulkan-loader gstreamer gst-plugins-base sdl2 gst-plugins-good xorgproto
+          /entrypoint.sh pkg install -y fontconfig freetype krb5 libc++ libgmp libgnutls libxcb libxcomposite libxcursor libxfixes libxrender opengl pulseaudio sdl2 vulkan-loader xorg-xrandr libandroid-shmem libandroid-spawn ffmpeg
+          /entrypoint.sh pkg install -y libltdl libsndfile libsoxr speexdsp glib dbus alsa-lib
+      - name: Compressing Termux files
+        run: tar cf termuxfs-x86_64.tar /data/data/com.termux/files/usr
+      - uses: actions/upload-artifact@v4.6.0
+        with:
+          name: artifact-x86_64
+          path: ./termuxfs-x86_64.tar
+      - name: "Create Release"
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+         name: "termuxfs"
+         tag_name: "build-20260218"
+         prerelease: false
+         files: |
+          ./termuxfs-x86_64.tar
+
+  build-aarch64:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: termux/termux-docker:aarch64
+      volumes: 
+        - /tmp/node20:/__e/node20
+    env:
+      TERMUX_MAIN_PACKAGE_FORMAT: debian
+      ANDROID_ROOT: /system
+      ANDROID_DATA: /data
+      PREFIX: /data/data/com.termux/files/usr
+      HOME: /data/data/com.termux/files/home
+      PATH: /data/data/com.termux/files/usr/bin
+      TMPDIR: /data/data/com.termux/files/usr/tmp
+      LANG: en_US.UTF-8
+      TZ: UTC
+    steps:
+      - name: set pkg command to use the packages-cf.termux.dev mirror
+        run: ln -sf ${PREFIX}/etc/termux/mirrors/default ${PREFIX}/etc/termux/chosen_mirrors
+      - name: upgrade all packages to prepare for installing nodejs
+        run: /entrypoint.sh bash -c "yes | pkg upgrade -y"
+      - name: fix executable bit for all binaries in $PREFIX/bin for all users
+        run: chmod -R o+x ${PREFIX}/bin
+      - name: install bionic-libc nodejs to force compatibility with actions/checkout and actions/upload-artifact
+        run: |
+          /entrypoint.sh pkg install -y nodejs-lts
+          ln -sf ${PREFIX}/bin /__e/node20/bin
+      - uses: actions/checkout@v4.2.2
+      - name: fix permissions of repository after actions/checkout, which ran as root user, while entrypoint.sh activates system user (1000)
+        run: chown -R 1000:1000 .
+      - name: setup
+        run: |
+          /entrypoint.sh pkg install -y ninja python git
+          /entrypoint.sh pip install meson
+          /entrypoint.sh pkg install -y tur-repo x11-repo
+          /entrypoint.sh pkg install -y clang pkg-config alsa-lib pulseaudio fontconfig freetype gnutls mesa libx11 libxcursor libxfixes libxi libxrandr libxrender libxext vulkan-loader gstreamer gst-plugins-base sdl2 gst-plugins-good xorgproto
+          /entrypoint.sh pkg install -y fontconfig freetype krb5 libc++ libgmp libgnutls libxcb libxcomposite libxcursor libxfixes libxrender opengl pulseaudio sdl2 vulkan-loader xorg-xrandr libandroid-shmem libandroid-spawn ffmpeg
+          /entrypoint.sh pkg install -y libltdl libsndfile libsoxr speexdsp glib dbus alsa-lib
+      - name: Compressing Termux files
+        run: tar cf termuxfs-aarch64.tar /data/data/com.termux/files/usr
+      - uses: actions/upload-artifact@v4.6.0
+        with:
+          name: artifact-aarch64
+          path: ./termuxfs-aarch64.tar
+      - name: "Create Release"
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+         name: "termuxfs"
+         tag_name: "build-20260218"
+         prerelease: false
+         files: |
+          ./termuxfs-aarch64.tar
+
+  # This is the ideal way termux-docker would work with GHA.
+  broken-ideal:
+    if: false
+    runs-on: ubuntu-latest
+    container: termux/termux-docker:x86_64
+    steps:
+      - name: setup
+        run: |
+          pkg install -y ninja python git
+          pip install meson
+      - uses: actions/checkout@v3.3.0
+      - name: build
+        run: touch artifact
+      - uses: actions/upload-artifact@v3.1.2
+        if: always()
+        with:
+          name: artifact
+          path: artifact
+
